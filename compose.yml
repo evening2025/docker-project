@@ -1,0 +1,38 @@
+services:
+  web:
+    image: "192.168.48.80:8082/cibuildapp:$BUILD_NUMBER"
+    container_name: compose_app
+    env_file:
+      - .env
+    ports:
+      - "9009:9000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+  db:
+    image: "mysql:latest"
+    container_name: compose_db
+    env_file:
+      - .env
+    environment:
+      MYSQL_DATABASE: django
+      MYSQL_USER: ravidai
+      MYSQL_PASSWORD: P@ssw0rd12
+      MYSQL_ROOT_PASSWORD: P@ssw0rd12
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+    restart: unless-stopped
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
+
+

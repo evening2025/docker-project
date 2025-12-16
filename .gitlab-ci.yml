@@ -1,0 +1,70 @@
+stages:          # List of stages for jobs, and their order of execution
+  - test
+  - image
+  - pull
+  - clean
+  - deploy
+
+variables:
+  BUILD_NUMBER: ${CI_PIPELINE_IID}
+
+
+test-job:
+  stage: test
+  allow_failure: true
+  tags:
+   - gitlabserver
+  script:
+    - ip a 
+    - pwd
+
+image-job:
+  stage: image
+  allow_failure: true
+  tags: 
+   - gitlabserver
+  script:
+    - ls -al
+    - docker image list
+    - docker build -t deployapp:$BUILD_NUMBER .
+    - docker login -u $USER -p $PASS http://192.168.48.80:8082
+    - docker tag deployapp:$BUILD_NUMBER 192.168.48.80:8082/cibuildapp:$BUILD_NUMBER
+    - docker image list 
+    - docker push 192.168.48.80:8082/cibuildapp:$BUILD_NUMBER
+    - echo "Succefully build image tag:$BUILD_NUMBER was push in SonaType Nexus"
+    - docker logout
+    - echo "Succefully Docker logout"
+
+
+clean-job:
+  stage: clean
+  allow_failure: true
+  tags:
+   - gitlabserver
+  script:
+    # Create variable for old IID and remove docker image
+    - export CI_OLDPIPELINE_IID=$(($CI_PIPELINE_IID - 1))
+    - echo "Succefully export a old docker image id:$CI_OLDPIPELINE_IID"
+    - docker image list
+    - docker rmi deployapp:$CI_OLDPIPELINE_IID || true
+    - docker rmi 192.168.48.80:8082/cibuildapp:$CI_OLDPIPELINE_IID || true
+    - echo "Deleting old build:$CI_OLDPIPELINE_IID"
+    - docker image list
+
+deploy-job:
+  stage: deploy
+  allow_failure: true
+  tags:
+   - prodserver
+  script:
+   - ip a
+   - pwd 
+   - docker login -u $USER -p $PASS http://192.168.48.80:8082
+   - echo "docker login Succefully"
+   - docker-compose down || true
+   - export CI_OLDPIPELINE_IID=$(($CI_PIPELINE_IID - 1))
+   - docker rmi 192.168.48.80:8082/cibuildapp:$CI_OLDPIPELINE_IID || true  #Remove tag image file
+   - docker image list
+   - cp "$ENV" .env
+   - cat .env
+   - docker-compose up -d
